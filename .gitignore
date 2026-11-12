@@ -1,0 +1,10 @@
+.build/
+build/
+.swiftpm/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+*.mp4
+*.mov
+*.partial.*
+*-output.log
