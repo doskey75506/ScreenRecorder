@@ -6,10 +6,10 @@ public enum VideoCodec: String, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
     public var title: String {
         switch self {
-        case .h264: "H.264（兼容性优先）"
+        case .h264: L10n.text("H.264 (Compatible)", "H.264（兼容性优先）")
         case .hevc: "HEVC / H.265"
-        case .vp9: "VP9（网页视频）"
-        case .av1: "AV1（编码较慢）"
+        case .vp9: L10n.text("VP9 (Web video)", "VP9（网页视频）")
+        case .av1: L10n.text("AV1 (Slower encoding)", "AV1（编码较慢）")
         }
     }
     public var containers: [VideoContainer] {
@@ -40,9 +40,9 @@ public enum CaptureResolution: String, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
     public var title: String {
         switch self {
-        case .native: "原始分辨率"
-        case .fullHD: "1080p（保持比例）"
-        case .compact: "640 × 480（保持比例）"
+        case .native: L10n.text("Original resolution", "原始分辨率")
+        case .fullHD: L10n.text("1080p (Fit)", "1080p（保持比例）")
+        case .compact: L10n.text("640 × 480 (Fit)", "640 × 480（保持比例）")
         }
     }
 
@@ -61,13 +61,13 @@ public enum RecordingPhase: Equatable, Sendable {
     public var canStop: Bool { self == .recording }
     public var title: String {
         switch self {
-        case .idle: "未选择录制来源"
-        case .selecting: "请选择显示器或窗口"
-        case .preparing: "正在准备预览…"
-        case .ready: "准备就绪"
-        case .starting: "正在启动录制…"
-        case .recording: "正在录制"
-        case .stopping: "正在保存录制…"
+        case .idle: L10n.text("No recording source selected", "未选择录制来源")
+        case .selecting: L10n.text("Choose a display or window", "请选择显示器或窗口")
+        case .preparing: L10n.text("Preparing preview…", "正在准备预览…")
+        case .ready: L10n.text("Ready", "准备就绪")
+        case .starting: L10n.text("Starting recording…", "正在启动录制…")
+        case .recording: L10n.text("Recording", "正在录制")
+        case .stopping: L10n.text("Saving recording…", "正在保存录制…")
         }
     }
 }
@@ -113,16 +113,16 @@ public struct TrimRange: Equatable, Sendable {
     }
 }
 
-public enum ValidationError: LocalizedError {
+public enum ValidationError: BilingualLocalizedError {
     case invalidCrop, invalidTimeRange, noVideo, unsupportedFormat, insufficientSpace, destinationUnavailable
-    public var errorDescription: String? {
+    public var localizedMessage: LocalizedMessage {
         switch self {
-        case .invalidCrop: "裁剪范围无效，请保留至少 2 × 2 像素的画面。"
-        case .invalidTimeRange: "时间范围无效，结束时间必须大于开始时间且不超过视频时长。"
-        case .noVideo: "文件中没有可读取的视频轨道。"
-        case .unsupportedFormat: "当前设备不支持所选编码与容器组合。"
-        case .insufficientSpace: "剩余磁盘空间不足，请选择其他保存位置。"
-        case .destinationUnavailable: "保存目录不可写，请重新选择。"
+        case .invalidCrop: LocalizedMessage("Invalid crop. Keep at least 2 × 2 pixels.", "裁剪范围无效，请保留至少 2 × 2 像素的画面。")
+        case .invalidTimeRange: LocalizedMessage("Invalid time range. The end must follow the start and stay within the video duration.", "时间范围无效，结束时间必须大于开始时间且不超过视频时长。")
+        case .noVideo: LocalizedMessage("No readable video track was found in this file.", "文件中没有可读取的视频轨道。")
+        case .unsupportedFormat: LocalizedMessage("This device does not support the selected codec and container.", "当前设备不支持所选编码与容器组合。")
+        case .insufficientSpace: LocalizedMessage("Not enough free disk space. Choose another save location.", "剩余磁盘空间不足，请选择其他保存位置。")
+        case .destinationUnavailable: LocalizedMessage("The save folder is not writable. Choose another folder.", "保存目录不可写，请重新选择。")
         }
     }
 }

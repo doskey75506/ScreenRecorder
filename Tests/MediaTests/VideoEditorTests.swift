@@ -68,7 +68,7 @@ final class VideoEditorTests: XCTestCase {
         await editor.load(source)
         await editor.export(to: source)
         XCTAssertNil(editor.exportedURL)
-        XCTAssertEqual(editor.message, "不能覆盖原始视频。")
+        XCTAssertEqual(editor.message, L10n.text("Cannot overwrite the original video.", "不能覆盖原始视频。"))
         let existing = directory.appendingPathComponent("existing.mp4")
         try Data("keep".utf8).write(to: existing)
         await editor.export(to: existing)
@@ -246,7 +246,7 @@ final class VideoEditorTests: XCTestCase {
         XCTAssertEqual(editor.start, 0.1)
         XCTAssertEqual(editor.end, 0.8)
         XCTAssertEqual(editor.crop.left, 20)
-        XCTAssertTrue(editor.message?.contains("找不到") == true)
+        XCTAssertTrue(editor.message?.contains(L10n.text("Cannot find or read", "找不到")) == true)
         editor.newProject()
     }
 

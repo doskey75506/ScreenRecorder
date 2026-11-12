@@ -31,7 +31,8 @@ final class CaptureService: NSObject, ObservableObject {
     @Published private(set) var recordedBytes: Int = 0
     @Published private(set) var sourceSize = CGSize.zero
     @Published private(set) var completedRecording: CompletedRecording?
-    @Published var message: String?
+    @Published private var status: LocalizedMessage?
+    var message: String? { status?.text() }
 
     @Published var codec: VideoCodec = .h264
     @Published var container: VideoContainer = .mp4
@@ -75,7 +76,7 @@ final class CaptureService: NSObject, ObservableObject {
 
     func chooseSource() {
         guard !phase.isBusy else { return }
-        message = nil
+        status = nil
         phase = .selecting
         SCContentSharingPicker.shared.isActive = true
         SCContentSharingPicker.shared.present()
@@ -87,7 +88,7 @@ final class CaptureService: NSObject, ObservableObject {
         panel.canChooseFiles = false
         panel.canCreateDirectories = true
         panel.directoryURL = directory
-        panel.prompt = "选择保存目录"
+        panel.prompt = L10n.text("Choose save folder", "选择保存目录")
         if panel.runModal() == .OK, let url = panel.url { directory = url }
     }
 
@@ -120,7 +121,7 @@ final class CaptureService: NSObject, ObservableObject {
                             height: selected.contentRect.height * CGFloat(selected.pointPixelScale))
         guard sourceSize.width >= 2, sourceSize.height >= 2 else {
             phase = .idle
-            message = "所选窗口没有可录制的画面，请重新选择。"
+            status = LocalizedMessage("The selected window has no recordable content. Choose another source.", "所选窗口没有可录制的画面，请重新选择。")
             return
         }
         let output = PreviewOutput()
@@ -142,14 +143,14 @@ final class CaptureService: NSObject, ObservableObject {
             stream = nil
             previewOutput = nil
             phase = .idle
-            message = "无法捕获画面：\(error.localizedDescription)\n请在系统设置的“隐私与安全性”中检查屏幕录制权限。"
+            status = LocalizedMessage("Could not capture content: \(LocalizedMessage(error: error).english)\nCheck Screen Recording access in System Settings → Privacy & Security.", "无法捕获画面：\(LocalizedMessage(error: error).chinese)\n请在系统设置的“隐私与安全性”中检查屏幕录制权限。")
         }
     }
 
     func start() async {
         guard phase.canStart, let stream else { return }
         phase = .starting
-        message = nil
+        status = nil
         completedRecording = nil
         elapsed = 0
         recordedBytes = 0
@@ -158,7 +159,7 @@ final class CaptureService: NSObject, ObservableObject {
                 let granted = await AVCaptureDevice.requestAccess(for: .audio)
                 guard granted else {
                     throw NSError(domain: "ScreenRecorder", code: 1, userInfo: [NSLocalizedDescriptionKey:
-                        "麦克风权限未开启。请在系统设置 → 隐私与安全性 → 麦克风中允许 ScreenRecorder。"])
+                        L10n.text("Microphone access is disabled. Allow ScreenRecorder in System Settings → Privacy & Security → Microphone.", "麦克风权限未开启。请在系统设置 → 隐私与安全性 → 麦克风中允许 ScreenRecorder。")])
                 }
             }
             guard self.stream === stream, phase == .starting else { return }
@@ -192,7 +193,7 @@ final class CaptureService: NSObject, ObservableObject {
             recordingURL = nil
             recordingPlan = nil
             if self.stream != nil { phase = .ready } else { phase = .idle }
-            message = error.localizedDescription
+            status = LocalizedMessage(error: error)
         }
     }
 
@@ -206,7 +207,7 @@ final class CaptureService: NSObject, ObservableObject {
             // stopCapture finishes the file; wait for recordingOutputDidFinishRecording before opening it.
             try await stream.stopCapture()
         } catch {
-            message = "停止录制时发生错误：\(error.localizedDescription)"
+            status = LocalizedMessage("Error stopping recording: \(LocalizedMessage(error: error).english)", "停止录制时发生错误：\(LocalizedMessage(error: error).chinese)")
             if let output = recordingOutput { try? stream.removeRecordingOutput(output) }
         }
         if recordingOutput == nil {
@@ -228,13 +229,13 @@ final class CaptureService: NSObject, ObservableObject {
         elapsed = output.recordedDuration.seconds.isFinite ? output.recordedDuration.seconds : 0
         recordedBytes = output.recordedFileSize
         if phase == .starting, let startingAt, Date().timeIntervalSince(startingAt) > 15 {
-            message = "录制未能及时启动，已停止。请重新选择来源。"
+            status = LocalizedMessage("Recording did not start in time and was stopped. Select the source again.", "录制未能及时启动，已停止。请重新选择来源。")
             Task { await stop() }
         }
         if phase == .recording {
             do { try RecordingFiles.checkDestination(directory, minimumBytes: 50 * 1024 * 1024) }
             catch {
-                message = error.localizedDescription + " 已停止录制并尝试保存。"
+                status = LocalizedMessage(error: error) + LocalizedMessage(" Recording stopped and a save was attempted.", " 已停止录制并尝试保存。")
                 Task { await stop() }
             }
         }
@@ -245,7 +246,7 @@ final class CaptureService: NSObject, ObservableObject {
         finalizationTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(15))
             guard !Task.isCancelled, let self, self.phase == .stopping else { return }
-            self.message = "录制文件未能正常完成。已保留原始文件，请检查：\(self.recordingURL?.path ?? "")"
+            self.status = LocalizedMessage("Recording could not finish normally. The original file has been kept at: \(self.recordingURL?.path ?? "")", "录制文件未能正常完成。已保留原始文件，请检查：\(self.recordingURL?.path ?? "")")
             self.finishCapture()
         }
     }
@@ -274,7 +275,7 @@ final class CaptureService: NSObject, ObservableObject {
 
     private func interrupted(_ capture: SCStream, error: Error?) {
         guard stream === capture else { return }
-        if let error { message = "录制来源已中断：\(error.localizedDescription)" }
+        if let error { status = LocalizedMessage("Recording source interrupted: \(LocalizedMessage(error: error).english)", "录制来源已中断：\(LocalizedMessage(error: error).chinese)") }
         if recordingOutput != nil {
             phase = .stopping
             timer?.invalidate()
@@ -307,7 +308,7 @@ extension CaptureService: SCContentSharingPickerObserver {
     nonisolated func contentSharingPickerStartDidFailWithError(_ error: Error) {
         Task { @MainActor in
             self.phase = self.stream == nil ? .idle : .ready
-            self.message = error.localizedDescription
+            self.status = LocalizedMessage(error: error)
         }
     }
 }
@@ -320,7 +321,7 @@ extension CaptureService: SCStreamDelegate {
     nonisolated func streamDidBecomeInactive(_ stream: SCStream) {
         Task { @MainActor in
             self.interrupted(stream, error: NSError(domain: "ScreenRecorder", code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "目标窗口已关闭或录制来源不可用。已尝试保存录制。 "]))
+                userInfo: [NSLocalizedDescriptionKey: L10n.text("The target window closed or the recording source is unavailable. A save was attempted. ", "目标窗口已关闭或录制来源不可用。已尝试保存录制。 ")]))
         }
     }
 }
@@ -348,7 +349,7 @@ extension CaptureService: SCRecordingOutputDelegate {
             let path = self.recordingURL?.path ?? ""
             let capture = self.stream
             self.finishCapture()
-            self.message = "录制失败：\(error.localizedDescription)\n如有已写入的数据，文件保留在：\(path)"
+            self.status = LocalizedMessage("Recording failed: \(LocalizedMessage(error: error).english)\nAny data already written has been kept at: \(path)", "录制失败：\(LocalizedMessage(error: error).chinese)\n如有已写入的数据，文件保留在：\(path)")
             try? await capture?.stopCapture()
         }
     }

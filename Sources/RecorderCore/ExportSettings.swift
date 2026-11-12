@@ -6,9 +6,9 @@ public enum ExportQuality: String, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
     public var title: String {
         switch self {
-        case .high: "高画质"
-        case .balanced: "均衡（推荐）"
-        case .compact: "小文件"
+        case .high: L10n.text("High quality", "高画质")
+        case .balanced: L10n.text("Balanced", "均衡（推荐）")
+        case .compact: L10n.text("Small file", "小文件")
         }
     }
 

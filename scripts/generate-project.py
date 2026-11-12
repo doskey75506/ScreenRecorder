@@ -85,7 +85,7 @@ products = add("products", isa="PBXGroup", name="Products", children=[core_produ
 main = add("main", isa="PBXGroup", children=core_refs + app_refs + [icon, products], sourceTree="<group>")
 project = add("project", isa="PBXProject", attributes={"LastUpgradeCheck": "1640"},
               buildConfigurationList=configurations("project", {}), compatibilityVersion="Xcode 14.0",
-              developmentRegion="zh-Hans", knownRegions=["zh-Hans", "en", "Base"],
+              developmentRegion="en", knownRegions=["en", "zh-Hans", "Base"],
               mainGroup=main, productRefGroup=products, projectDirPath="", projectRoot="", targets=[core, app])
 
 

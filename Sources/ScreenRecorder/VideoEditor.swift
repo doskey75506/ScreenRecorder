@@ -36,7 +36,8 @@ final class VideoEditor: ObservableObject {
     @Published var container: VideoContainer = .mp4
     @Published var quality: ExportQuality = .balanced
     @Published var resolution: CaptureResolution = .native
-    @Published var message: String?
+    @Published private var status: LocalizedMessage?
+    var message: String? { status?.text() }
     let player = AVPlayer()
 
     private var media: ProbedMedia?
@@ -105,7 +106,7 @@ final class VideoEditor: ObservableObject {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie, .data]
         panel.allowsMultipleSelection = true
-        panel.message = "导入一个或多个视频，再分别选取时间段加入拼接列表。已有片段会保留。"
+        panel.message = L10n.text("Import one or more videos, then select ranges to add to the clip list. Existing clips will be kept.", "导入一个或多个视频，再分别选取时间段加入拼接列表。已有片段会保留。")
         if panel.runModal() == .OK {
             for url in panel.urls { await load(url) }
         }
@@ -120,7 +121,7 @@ final class VideoEditor: ObservableObject {
         container = recording.container
         await export(to: recording.destination)
         if exportedURL == nil {
-            message = (message ?? "转换未完成。") + "\n原始录屏已保留：\(recording.source.path)"
+            status = (status ?? LocalizedMessage("Conversion did not finish.", "转换未完成。")) + LocalizedMessage("\nOriginal recording kept at: \(recording.source.path)", "\n原始录屏已保留：\(recording.source.path)")
         }
     }
 
@@ -129,7 +130,7 @@ final class VideoEditor: ObservableObject {
         loading = true
         defer { loading = false }
         player.pause()
-        message = nil
+        status = nil
         thumbnailTask?.cancel()
         thumbnailRunner?.cancel()
         do {
@@ -157,7 +158,7 @@ final class VideoEditor: ObservableObject {
             }
             await activate(source)
         } catch {
-            message = "无法打开视频：\(error.localizedDescription)"
+            status = LocalizedMessage("Could not open video: \(LocalizedMessage(error: error).english)", "无法打开视频：\(LocalizedMessage(error: error).chinese)")
         }
     }
 
@@ -197,14 +198,14 @@ final class VideoEditor: ObservableObject {
         let clip = EditClip(sourceID: source.id, name: source.name, trim: TrimRange(start: start, end: end), crop: crop)
         clips.append(clip)
         editedClipID = clip.id
-        message = "已加入片段 \(clips.count)。导出只包含列表中的片段；调整后请点击“更新所选片段”。"
+        status = LocalizedMessage("Added clip \(clips.count). Only listed clips will be exported. After editing, click “Update selected clip”.", "已加入片段 \(clips.count)。导出只包含列表中的片段；调整后请点击“更新所选片段”。")
     }
 
     func updateSelectedClip() {
         guard !exporting, validDraft, let id = editedClipID, let index = clips.firstIndex(where: { $0.id == id }),
               let source = currentSource else { return }
         clips[index] = EditClip(id: id, sourceID: source.id, name: source.name, trim: TrimRange(start: start, end: end), crop: crop)
-        message = "所选片段已更新。"
+        status = LocalizedMessage("Selected clip updated.", "所选片段已更新。")
     }
 
     func editClip(_ id: UUID) async {
@@ -255,7 +256,7 @@ final class VideoEditor: ObservableObject {
         crop = CropMargins()
         nativePlayback = true
         exportedURL = nil
-        message = nil
+        status = nil
     }
 
     func closeSession() {
@@ -310,10 +311,10 @@ final class VideoEditor: ObservableObject {
         panel.directoryURL = sourceURL.deletingLastPathComponent()
         panel.nameFieldStringValue = sourceURL.deletingPathExtension().lastPathComponent +
             (clips.isEmpty ? "-edited." : "-merged.") + container.rawValue
-        panel.prompt = "导出新视频"
+        panel.prompt = L10n.text("Export new video", "导出新视频")
         guard panel.runModal() == .OK, let target = panel.url else { return nil }
         guard !isSourceDestination(target) else {
-            message = "请选择新的文件名，原始视频不会被覆盖。"
+            status = LocalizedMessage("Choose a new file name. The original video will be kept.", "请选择新的文件名，原始视频不会被覆盖。")
             return nil
         }
         return target
@@ -331,14 +332,14 @@ final class VideoEditor: ObservableObject {
     func export(to requestedURL: URL) async {
         guard !exporting, validEdit, let currentSource else { return }
         guard !isSourceDestination(requestedURL) else {
-            message = "不能覆盖原始视频。"
+            status = LocalizedMessage("Cannot overwrite the original video.", "不能覆盖原始视频。")
             return
         }
         exporting = true
         cancelled = false
         progress = 0
         exportedURL = nil
-        message = nil
+        status = nil
         let jobID = UUID()
         exportID = jobID
         player.pause()
@@ -381,7 +382,7 @@ final class VideoEditor: ObservableObject {
                 audioTrackCount: currentSource.media.audioCount, frameRate: firstExportSource?.media.frameRate ?? 30)
             let process = MediaProcess()
             runner = process
-            guard !cancelled else { message = "已取消导出。"; return }
+            guard !cancelled else { status = LocalizedMessage("Export cancelled.", "已取消导出。"); return }
             let arguments = segments.isEmpty
                 ? settings.arguments(input: currentSource.snapshot.workingURL, output: staging)
                 : settings.concatenationArguments(segments: segments, output: staging)
@@ -391,7 +392,7 @@ final class VideoEditor: ObservableObject {
                     self.progress = max(self.progress, Float(min(0.99, max(0, seconds / totalDuration))))
                 }
             }
-            guard !cancelled else { message = "已取消导出。"; return }
+            guard !cancelled else { status = LocalizedMessage("Export cancelled.", "已取消导出。"); return }
             let target = RecordingFiles.uniqueURL(directory: directory,
                 stem: requestedURL.deletingPathExtension().lastPathComponent, container: selectedContainer)
             try FileManager.default.moveItem(at: staging, to: target)
@@ -399,9 +400,9 @@ final class VideoEditor: ObservableObject {
             exportedURL = target
             let attributes = try? FileManager.default.attributesOfItem(atPath: target.path)
             let bytes = (attributes?[.size] as? NSNumber)?.int64Value ?? 0
-            message = "已导出：\(target.lastPathComponent)（\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))）"
+            status = LocalizedMessage("Exported: \(target.lastPathComponent) (\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)))", "已导出：\(target.lastPathComponent)（\(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))）")
         } catch {
-            message = cancelled ? "已取消导出。" : "导出失败：\(error.localizedDescription)"
+            status = cancelled ? LocalizedMessage("Export cancelled.", "已取消导出。") : LocalizedMessage("Export failed: \(LocalizedMessage(error: error).english)", "导出失败：\(LocalizedMessage(error: error).chinese)")
         }
     }
 

@@ -1,12 +1,13 @@
 import Foundation
+import RecorderCore
 import Darwin
 
-enum MediaToolError: LocalizedError {
+enum MediaToolError: BilingualLocalizedError {
     case missing(String), failed(String)
-    var errorDescription: String? {
+    var localizedMessage: LocalizedMessage {
         switch self {
-        case .missing(let name): "未找到 \(name)。请安装 FFmpeg（包含 ffprobe），然后重新启动程序。"
-        case .failed(let text): text.isEmpty ? "视频处理失败。" : text
+        case .missing(let name): LocalizedMessage("\(name) was not found. Install FFmpeg (including ffprobe), then restart the app.", "未找到 \(name)。请安装 FFmpeg（包含 ffprobe），然后重新启动程序。")
+        case .failed(let text): text.isEmpty ? LocalizedMessage("Video processing failed.", "视频处理失败。") : LocalizedMessage(text, text)
         }
     }
 }

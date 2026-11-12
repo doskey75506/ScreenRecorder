@@ -1,11 +1,12 @@
 import Foundation
+import RecorderCore
 import Darwin
 
-enum EditingSourceError: LocalizedError {
+enum EditingSourceError: BilingualLocalizedError {
     case unavailable(String)
-    var errorDescription: String? {
+    var localizedMessage: LocalizedMessage {
         switch self {
-        case .unavailable(let name): "找不到或无法读取源视频“\(name)”。请重新选择文件；已有片段与裁剪参数保持不变。"
+        case .unavailable(let name): LocalizedMessage("Cannot find or read the source video “\(name)”. Select it again. Existing clips and crop settings have been kept.", "找不到或无法读取源视频“\(name)”。请重新选择文件；已有片段与裁剪参数保持不变。")
         }
     }
 }
