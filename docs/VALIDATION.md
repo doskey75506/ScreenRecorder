@@ -1,5 +1,13 @@
 # 验证与验收
 
+## GitHub CI 配置复查（2026-11-12）
+
+- 新增 `.github/workflows/ci.yml`，推送、PR 和手动触发均执行 Intel / Apple Silicon 两种 macOS runner 的完整测试与双架构构建。
+- `scripts/ci.sh` 预先检查 FFmpeg / ffprobe 及全部所需软件编码器，输出 XCTest XML 和完整日志；同时读取 XML 与 XCTest 文本，避免旧版 SwiftPM 漏报跳过项目。
+- 本地完整 CI 测试入口验证 29 项测试通过、0 失败、0 跳过；另用带跳过项的报告样本确认 CI 会失败。
+- actionlint 工作流检查、脚本语法检查、工程重新生成一致性检查、中英文文档链接检查通过；本地 Release 构建、签名及双架构检查通过。
+- 云端运行结果、日志和应用产物见 [GitHub Actions](https://github.com/doskey75506/ScreenRecorder/actions/workflows/ci.yml)。云端测试不替代下方实机验收清单。
+
 ## 中英文界面复查（2026-11-12）
 
 - 首次启动默认英文；窗口右上角支持 English / 简体中文即时切换，选择在重启后保留。已分别验证中文和英文重启恢复。
