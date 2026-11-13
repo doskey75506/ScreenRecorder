@@ -30,7 +30,7 @@ struct ScreenRecorderApp: App {
                     delegate.editor = editor
                 }
         }
-        .defaultSize(width: 1080, height: 790)
+        .defaultSize(width: 1080, height: 740)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}

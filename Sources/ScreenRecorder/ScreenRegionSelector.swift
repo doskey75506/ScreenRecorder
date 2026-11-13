@@ -26,14 +26,21 @@ final class ScreenRegionSelector {
                 let panel = RegionPanel(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
                 panel.setFrame(screen.frame, display: false)
                 panel.level = .screenSaver
+                panel.title = L10n.text("Select recording area", "拖选录制区域")
+                panel.isFloatingPanel = true
+                panel.becomesKeyOnlyIfNeeded = false
+                panel.ignoresMouseEvents = false
+                panel.animationBehavior = .none
                 panel.isOpaque = false
                 panel.backgroundColor = .clear
                 panel.hasShadow = false
                 panel.hidesOnDeactivate = false
-                panel.sharingType = .none
+                // Panels are removed before capture is prepared. Allow normal
+                // window inspection so the selection UI can be verified.
                 panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
                 let view = RegionSelectionView(frame: CGRect(origin: .zero, size: screen.frame.size),
                                                pixelScale: screen.backingScaleFactor)
+                view.autoresizingMask = [.width, .height]
                 let displaySize = screen.frame.size
                 view.onSelection = { [weak self] rect in
                     self?.finish(rect.map { Selection(displayID: number.uint32Value, appKitRect: $0, displaySize: displaySize) })
@@ -74,10 +81,11 @@ final class ScreenRegionSelector {
 
 private final class RegionPanel: NSPanel {
     override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 @MainActor
-private final class RegionSelectionView: NSView {
+final class RegionSelectionView: NSView {
     var onSelection: ((CGRect?) -> Void)?
     private let pixelScale: CGFloat
     private var start: CGPoint?

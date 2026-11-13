@@ -44,7 +44,7 @@ Launch the `.app` or run through Xcode so macOS can identify the app for privacy
 
 ## Record
 
-1. Click **Choose display / window** and choose a source in the macOS sharing picker.
+1. Start with one of the three buttons above the preview: **Area**, **Screen**, or **Window**. Screen and Window open separate macOS source pickers; Area opens the desktop drag overlay immediately.
 2. Select the codec, container, resolution, and save folder. Defaults are **H.264 MP4, 30 fps, original resolution, and SDR**.
 3. Enable source audio and/or a microphone if needed. Grant permissions when macOS asks.
 4. Click **Start recording**, then **Stop and save** when finished. You can also stop from the menu bar.
@@ -56,9 +56,11 @@ The language menu at the top right switches between **English / 简体中文** w
 
 ### Record a screen area
 
-Click **Select screen area…**. On macOS 15.2+, choose a display in the system sharing picker if one is not already selected. The app temporarily hides its main window and shows a selection overlay on that display. Drag a rectangle and release to confirm, or press **Esc** / right-click to cancel. A selection stays within one display; repeat the selection to use a different area.
+Click **Area**. The app immediately hides its main window and shows desktop selection overlays. Drag a rectangle on the desired display and release to confirm, or press **Esc** / right-click to cancel. A selection stays within one display. Dragging works before capture permission is granted. If authorization is needed, macOS 15.2+ then asks you to choose that same display in its sharing picker; a different display is rejected. **Cancel selection** returns to the recording page without leaving the controls locked.
 
-The preview and recording both capture only the selected rectangle. The sidebar shows its physical pixel dimensions; resolution presets scale that area while preserving its aspect ratio. Tiny selections are rejected and dimensions are rounded inward to whole, even pixels. Cancelling keeps the previous source and area. **Use full display** removes the area restriction. Source and area controls are locked while recording.
+The preview and recording both capture only the selected rectangle. Its physical pixel dimensions appear above the preview; resolution presets scale that area while preserving its aspect ratio. Tiny selections are rejected and dimensions are rounded inward to whole, even pixels. Cancelling keeps the previous source and area. Select **Screen** to record a full display, or **Area** to redraw. Source controls are locked while recording.
+
+The three source buttons stay above the preview. The save folder and **Start recording / Stop and save** stay in a fixed footer on the right, outside the scrollable settings, so longer options cannot push them out of the window.
 
 On macOS 15.0–15.1, this mode needs Screen Recording permission in System Settings; macOS may require restarting the app after granting it. Select the rectangle on the desired display. Area selection limits the **picture**, while source audio continues to follow the selected display. It does not isolate audio to the rectangle.
 
