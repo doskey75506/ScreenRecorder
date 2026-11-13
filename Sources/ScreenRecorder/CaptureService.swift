@@ -103,6 +103,7 @@ final class CaptureService: NSObject, ObservableObject {
         let picker = SCContentSharingPicker.shared
         var options = picker.defaultConfiguration
         options.allowedPickerModes = source == .window ? [.singleWindow] : [.singleDisplay]
+        options.allowsChangingSelectedContent = true
         picker.defaultConfiguration = options
         picker.isActive = true
         let style: SCShareableContentStyle = source == .window ? .window : .display
@@ -190,7 +191,14 @@ final class CaptureService: NSObject, ObservableObject {
     private func restoreSelectionState() {
         requestedSource = nil
         pendingRegion = nil
+        if let stream { lockPickerChanges(for: stream) }
         phase = stream == nil ? .idle : .ready
+    }
+
+    private func lockPickerChanges(for stream: SCStream) {
+        var options = SCContentSharingPicker.shared.defaultConfiguration
+        options.allowsChangingSelectedContent = false
+        SCContentSharingPicker.shared.setConfiguration(options, for: stream)
     }
 
     func useFullDisplay() async {
@@ -246,6 +254,7 @@ final class CaptureService: NSObject, ObservableObject {
         }
         let output = PreviewOutput()
         let capture = SCStream(filter: selected, configuration: configuration(recording: false), delegate: self)
+        lockPickerChanges(for: capture)
         output.onFrame = { [weak self, weak capture] image in
             Task { @MainActor in
                 guard let self, let capture, self.stream === capture else { return }
