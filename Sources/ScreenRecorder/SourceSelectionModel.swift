@@ -72,7 +72,7 @@ final class SourceSelectionModel: ObservableObject, Identifiable {
             if let previous, !updated.contains(where: { $0.hasSameIdentity(as: previous) }) { selectedID = nil }
         } catch {
             guard generation == request, !Task.isCancelled else { return }
-            self.error = LocalizedMessage(error: error)
+            self.error = CaptureFailure.isPermissionDenied(error) ? CaptureFailure.message(for: error) : LocalizedMessage(error: error)
         }
     }
 

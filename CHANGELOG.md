@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- Stop area capture on denied access instead of chaining global permission and sharing dialogs.
+- Use actual ScreenCaptureKit results instead of CoreGraphics preflight gates; distinguish permission denials from other capture errors and show the running app identity for recovery.
+- Allow builds with a persistent Apple signing identity via `SCREENRECORDER_SIGN_IDENTITY`; document stale privacy grants after ad hoc updates.
+
 - Open the desktop drag overlay immediately from Area; request display authorization after selection when needed.
 - Present source pickers for the existing preview stream so the one-stream limit cannot suppress a replacement picker.
 - Keep Area, Screen, and Window as parallel first-level actions and pin save-folder and recording controls outside the settings scroll view.

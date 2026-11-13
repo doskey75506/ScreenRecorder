@@ -44,7 +44,7 @@ Launch the `.app` or run through Xcode so macOS can identify the app for privacy
 
 ## Record
 
-1. Start with one of the three buttons above the preview: **Area**, **Screen**, or **Window**. With Screen Recording permission, Screen and Window open searchable in-app lists; otherwise they use the macOS sharing picker. Area opens the desktop drag overlay immediately.
+1. Start with one of the three buttons above the preview: **Area**, **Screen**, or **Window**. Screen and Window open searchable in-app lists and ask ScreenCaptureKit for access; the macOS sharing picker remains available as an alternative. Area opens the desktop drag overlay immediately.
 2. Select the codec, container, resolution, and save folder. Defaults are **H.264 MP4, 30 fps, original resolution, and SDR**.
 3. Enable source audio and/or a microphone if needed. Grant permissions when macOS asks.
 4. Click **Start recording**, then **Stop and save** when finished. You can also stop from the menu bar.
@@ -60,11 +60,23 @@ Allow the app you actually run in **System Settings → Privacy & Security → S
 
 Search or refresh the list, select a source, then click **Preview source**. Recording still starts with the separate **Start recording** button. No source is selected automatically. Refreshing clears the selection if that window disappears, and confirming checks the source again before opening its preview. Cancel keeps the previous preview. **Use macOS picker…** is always available from the list as an alternative.
 
-The app checks permission again when loading and confirming sources. If permission is missing, the system sharing picker remains available. macOS controls its own permission prompts; this feature removes repeated sharing-picker calls by the app and does not change system privacy settings automatically.
+The app asks ScreenCaptureKit directly when loading and confirming sources; a failed CoreGraphics preflight does not force the system picker. If permission is missing, the system sharing picker remains available. macOS controls its own permission prompts; this feature removes repeated sharing-picker calls by the app and does not change system privacy settings automatically.
+
+### Permission enabled but capture denied
+
+Ad hoc signatures change with each build. macOS can keep an enabled entry for an older signature while denying the new app. Quit all ScreenRecorder copies, remove the old entry from **Screen & System Audio Recording**, add the installed `.app` again with **+**, and reopen it. Use one installed copy consistently. Capture errors now include the error domain/code; permission denials also show the running bundle path and build number. Other errors do not automatically imply a permission problem.
+
+For persistent permissions across updates, use the same Apple-issued signing certificate. If one is installed in your Keychain, build with its exact identity:
+
+```sh
+SCREENRECORDER_SIGN_IDENTITY="Apple Development: Your Name (TEAMID)" ./scripts/build.sh
+```
+
+The build does not create certificates or change privacy settings. Without a certificate, local and CI builds remain ad hoc signed and may need reauthorization after an update. See [Apple's explanation of this signing issue](https://developer.apple.com/forums/thread/819406).
 
 ### Record a screen area
 
-Click **Area**. The app immediately hides its main window and shows desktop selection overlays. Drag a rectangle on the desired display and release to confirm, or press **Esc** / right-click to cancel. A selection stays within one display. Dragging works before capture permission is granted. If authorization is needed, macOS 15.2+ then asks you to choose that same display in its sharing picker; a different display is rejected. **Cancel selection** returns to the recording page without leaving the controls locked.
+Click **Area**. The app immediately hides its main window and shows desktop selection overlays. Drag a rectangle on the desired display and release to confirm, or press **Esc** / right-click to cancel. A selection stays within one display. Dragging works before capture permission is granted. Area asks ScreenCaptureKit directly for recording access. If macOS denies access, the app stops with recovery instructions instead of chaining another Share dialog. On macOS 15.2+, you may alternatively choose Screen → Use macOS picker first, then draw an area on that shared display. **Cancel selection** returns to the recording page without leaving the controls locked.
 
 The preview and recording both capture only the selected rectangle. Its physical pixel dimensions appear above the preview; resolution presets scale that area while preserving its aspect ratio. Tiny selections are rejected and dimensions are rounded inward to whole, even pixels. Cancelling keeps the previous source and area. Select **Screen** to record a full display, or **Area** to redraw. Source controls are locked while recording.
 

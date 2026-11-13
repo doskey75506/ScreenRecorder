@@ -5,7 +5,6 @@ import RecorderCore
 @MainActor
 enum DirectCaptureSources {
     private static func content() async throws -> SCShareableContent {
-        guard CGPreflightScreenCaptureAccess() else { throw SourceSelectionError.permissionRequired }
         return try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
     }
 

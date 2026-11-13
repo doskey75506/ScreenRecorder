@@ -66,7 +66,6 @@ final class CaptureService: NSObject, ObservableObject {
     private var finalizationTask: Task<Void, Never>?
     private let regionSelector = ScreenRegionSelector()
     private var requestedSource: RecordingSource?
-    private var pendingRegion: ScreenRegionSelector.Selection?
     private let frameQueue = DispatchQueue(label: "ScreenRecorder.preview", qos: .utility)
 
     override init() {
@@ -93,15 +92,12 @@ final class CaptureService: NSObject, ObservableObject {
 
     private func chooseSource(_ source: RecordingSource) {
         guard !phase.isBusy else { return }
-        pendingRegion = nil
         status = nil
-        if CGPreflightScreenCaptureAccess() {
-            requestedSource = source
-            phase = .selecting
-            sourceChooser = SourceSelectionModel(mode: source) { try await DirectCaptureSources.options(for: source) }
-        } else {
-            presentPicker(for: source)
-        }
+        // ScreenCaptureKit is the authority for its own access. A CoreGraphics
+        // preflight can disagree with an existing ScreenCaptureKit grant.
+        requestedSource = source
+        phase = .selecting
+        sourceChooser = SourceSelectionModel(mode: source) { try await DirectCaptureSources.options(for: source) }
     }
 
     func confirmDirectSource() async {
@@ -117,13 +113,9 @@ final class CaptureService: NSObject, ObservableObject {
             await prepare(selected, mode: chooser.mode)
         } catch {
             guard sourceChooser === chooser, phase == .selecting else { return }
-            if !CGPreflightScreenCaptureAccess() {
-                useSystemSourcePicker()
-            } else {
-                chooser.error = LocalizedMessage(error: error)
-                if let sourceError = error as? SourceSelectionError, case .unavailable = sourceError {
-                    chooser.selectedID = nil
-                }
+            chooser.error = CaptureFailure.message(for: error)
+            if let sourceError = error as? SourceSelectionError, case .unavailable = sourceError {
+                chooser.selectedID = nil
             }
         }
     }
@@ -159,35 +151,17 @@ final class CaptureService: NSObject, ObservableObject {
         guard !phase.isBusy else { return }
         status = nil
         requestedSource = nil
-        pendingRegion = nil
         phase = .selectingRegion
         // Show the desktop overlay first, independently of capture permission.
         let selection = await regionSelector.select()
         guard phase == .selectingRegion else { return }
         guard let selection else { restoreSelectionState(); return }
-        if #available(macOS 15.2, *), let filter, filter.style == .display,
+        if #available(macOS 15.2, *), stream != nil, let filter, filter.style == .display,
            filter.includedDisplays.contains(where: { $0.displayID == selection.displayID }) {
             await prepareRegion(selection, filter: filter)
             return
         }
-        if CGPreflightScreenCaptureAccess() {
-            await prepareDirectRegion(selection)
-        } else if #available(macOS 15.2, *) {
-            pendingRegion = selection
-            status = LocalizedMessage(
-                "Area selected. Choose the same display in the macOS picker to allow recording, or cancel below.",
-                "区域已选好。请在 macOS 选源器中选择框选所在屏幕以允许录制，或点击下方取消。")
-            presentPicker(for: .area)
-        } else {
-            guard CGRequestScreenCaptureAccess() else {
-                restoreSelectionState()
-                status = LocalizedMessage(
-                    "Allow ScreenRecorder in System Settings → Privacy & Security → Screen Recording, then try again. macOS may require restarting the app.",
-                    "请在系统设置 → 隐私与安全性 → 屏幕录制中允许 ScreenRecorder 后重试。macOS 可能要求重新启动应用。")
-                return
-            }
-            await prepareDirectRegion(selection)
-        }
+        await prepareDirectRegion(selection)
     }
 
     private func prepareRegion(_ selection: ScreenRegionSelector.Selection, filter selected: SCContentFilter) async {
@@ -213,8 +187,9 @@ final class CaptureService: NSObject, ObservableObject {
             let selected = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
             await prepareRegion(selection, filter: selected)
         } catch {
+            guard phase == .selectingRegion else { return }
             restoreSelectionState()
-            status = LocalizedMessage(error: error)
+            status = CaptureFailure.message(for: error)
         }
     }
 
@@ -230,7 +205,6 @@ final class CaptureService: NSObject, ObservableObject {
 
     private func restoreSelectionState() {
         requestedSource = nil
-        pendingRegion = nil
         if let stream { lockPickerChanges(for: stream) }
         phase = stream == nil ? .idle : .ready
     }
@@ -312,7 +286,11 @@ final class CaptureService: NSObject, ObservableObject {
             stream = nil
             previewOutput = nil
             phase = .idle
-            status = LocalizedMessage("Could not capture content: \(LocalizedMessage(error: error).english)\nCheck Screen Recording access in System Settings → Privacy & Security.", "无法捕获画面：\(LocalizedMessage(error: error).chinese)\n请在系统设置的“隐私与安全性”中检查屏幕录制权限。")
+            filter = nil
+            captureRegion = nil
+            sourceMode = nil
+            sourceSize = .zero
+            status = CaptureFailure.message(for: error)
         }
     }
 
@@ -425,7 +403,6 @@ final class CaptureService: NSObject, ObservableObject {
         sourceChooser?.cancel()
         sourceChooser = nil
         requestedSource = nil
-        pendingRegion = nil
         timer?.invalidate()
         timer = nil
         finalizationTask?.cancel()
@@ -479,26 +456,12 @@ extension CaptureService: SCContentSharingPickerObserver {
     nonisolated func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
         Task { @MainActor in
             guard self.phase == .selecting, self.sourceChooser == nil, let mode = self.requestedSource else { return }
-            let area = self.pendingRegion
             self.requestedSource = nil
-            self.pendingRegion = nil
-            if mode == .area {
-                guard #available(macOS 15.2, *), let area, filter.style == .display,
-                      filter.includedDisplays.contains(where: { $0.displayID == area.displayID }) else {
-                    self.restoreSelectionState()
-                    self.status = LocalizedMessage(
-                        "Choose the display where you drew the area. Select Area to try again.",
-                        "授权的屏幕与框选区域不一致，请点击“区域”重新选择。")
-                    return
-                }
-                await self.prepareRegion(area, filter: filter)
-            } else {
-                guard (mode == .window && filter.style == .window) || (mode == .display && filter.style == .display) else {
-                    self.restoreSelectionState()
-                    return
-                }
-                await self.prepare(filter, mode: mode)
+            guard (mode == .window && filter.style == .window) || (mode == .display && filter.style == .display) else {
+                self.restoreSelectionState()
+                return
             }
+            await self.prepare(filter, mode: mode)
         }
     }
 
