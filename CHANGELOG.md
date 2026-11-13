@@ -11,6 +11,7 @@
 
 ### Added
 
+- Searchable in-app screen and window lists when Screen Recording access is available, with refresh, cancellation, fresh source validation, and a macOS picker fallback.
 - Drag-to-select screen recording areas, with live region previews, cancellation, and full-display reset.
 - Screen and window recording with optional source audio and microphone capture.
 - Video cropping, trimming, conversion, compression, and ordered clip concatenation.

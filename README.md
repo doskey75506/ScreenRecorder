@@ -44,7 +44,7 @@ Launch the `.app` or run through Xcode so macOS can identify the app for privacy
 
 ## Record
 
-1. Start with one of the three buttons above the preview: **Area**, **Screen**, or **Window**. Screen and Window open separate macOS source pickers; Area opens the desktop drag overlay immediately.
+1. Start with one of the three buttons above the preview: **Area**, **Screen**, or **Window**. With Screen Recording permission, Screen and Window open searchable in-app lists; otherwise they use the macOS sharing picker. Area opens the desktop drag overlay immediately.
 2. Select the codec, container, resolution, and save folder. Defaults are **H.264 MP4, 30 fps, original resolution, and SDR**.
 3. Enable source audio and/or a microphone if needed. Grant permissions when macOS asks.
 4. Click **Start recording**, then **Stop and save** when finished. You can also stop from the menu bar.
@@ -53,6 +53,14 @@ Launch the `.app` or run through Xcode so macOS can identify the app for privacy
 Recordings default to `~/Movies/ScreenRecorder/`; a different save folder is remembered. Resizing a source window does not change the output canvas after recording starts. To record a browser tab, move it into its own browser window and select that window.
 
 The language menu at the top right switches between **English / 简体中文** without restarting or clearing your project. Native macOS pickers, dialogs, and system errors follow the system language.
+
+### Choose sources without repeated Share confirmation
+
+Allow the app you actually run in **System Settings → Privacy & Security → Screen & System Audio Recording** (called **Screen Recording** on some macOS versions), then restart it if macOS requests it. Screen and Window will use the app's own source list rather than opening the system sharing picker each time. Area recording also uses this permission after you draw a selection.
+
+Search or refresh the list, select a source, then click **Preview source**. Recording still starts with the separate **Start recording** button. No source is selected automatically. Refreshing clears the selection if that window disappears, and confirming checks the source again before opening its preview. Cancel keeps the previous preview. **Use macOS picker…** is always available from the list as an alternative.
+
+The app checks permission again when loading and confirming sources. If permission is missing, the system sharing picker remains available. macOS controls its own permission prompts; this feature removes repeated sharing-picker calls by the app and does not change system privacy settings automatically.
 
 ### Record a screen area
 

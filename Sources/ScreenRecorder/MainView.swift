@@ -171,6 +171,14 @@ private struct RecordingView: View {
                 capture.container = MediaFormats.recordingContainers(for: codec).first ?? .mp4
             }
         }
+        .sheet(item: Binding(get: { capture.sourceChooser }, set: { value in
+            if value == nil, capture.sourceChooser != nil { capture.cancelSourceSelection() }
+        })) { chooser in
+            SourceSelectionView(model: chooser,
+                                confirm: { Task { await capture.confirmDirectSource() } },
+                                cancel: { capture.cancelSourceSelection() },
+                                useSystemPicker: { capture.useSystemSourcePicker() })
+        }
     }
 
     private var recordingControls: some View {

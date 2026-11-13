@@ -43,6 +43,7 @@ final class CaptureService: NSObject, ObservableObject {
         return phase.title
     }
     @Published private(set) var sourceMode: RecordingSource?
+    @Published private(set) var sourceChooser: SourceSelectionModel?
 
     @Published var codec: VideoCodec = .h264
     @Published var container: VideoContainer = .mp4
@@ -94,7 +95,44 @@ final class CaptureService: NSObject, ObservableObject {
         guard !phase.isBusy else { return }
         pendingRegion = nil
         status = nil
-        presentPicker(for: source)
+        if CGPreflightScreenCaptureAccess() {
+            requestedSource = source
+            phase = .selecting
+            sourceChooser = SourceSelectionModel(mode: source) { try await DirectCaptureSources.options(for: source) }
+        } else {
+            presentPicker(for: source)
+        }
+    }
+
+    func confirmDirectSource() async {
+        guard phase == .selecting, let chooser = sourceChooser, chooser.canConfirm,
+              let option = chooser.selectedOption else { return }
+        chooser.confirming = true
+        defer { chooser.confirming = false }
+        do {
+            let selected = try await DirectCaptureSources.resolve(option, mode: chooser.mode)
+            guard sourceChooser === chooser, phase == .selecting else { return }
+            requestedSource = nil
+            sourceChooser = nil
+            await prepare(selected, mode: chooser.mode)
+        } catch {
+            guard sourceChooser === chooser, phase == .selecting else { return }
+            if !CGPreflightScreenCaptureAccess() {
+                useSystemSourcePicker()
+            } else {
+                chooser.error = LocalizedMessage(error: error)
+                if let sourceError = error as? SourceSelectionError, case .unavailable = sourceError {
+                    chooser.selectedID = nil
+                }
+            }
+        }
+    }
+
+    func useSystemSourcePicker() {
+        guard phase == .selecting, let chooser = sourceChooser else { return }
+        chooser.cancel()
+        sourceChooser = nil
+        presentPicker(for: chooser.mode)
     }
 
     private func presentPicker(for source: RecordingSource) {
@@ -183,6 +221,8 @@ final class CaptureService: NSObject, ObservableObject {
     func cancelSourceSelection() {
         guard phase == .selecting || phase == .selectingRegion else { return }
         regionSelector.cancel()
+        sourceChooser?.cancel()
+        sourceChooser = nil
         SCContentSharingPicker.shared.isActive = false
         restoreSelectionState()
         status = nil
@@ -382,6 +422,8 @@ final class CaptureService: NSObject, ObservableObject {
 
     private func finishCapture() {
         regionSelector.cancel()
+        sourceChooser?.cancel()
+        sourceChooser = nil
         requestedSource = nil
         pendingRegion = nil
         timer?.invalidate()
@@ -427,7 +469,7 @@ final class CaptureService: NSObject, ObservableObject {
 extension CaptureService: SCContentSharingPickerObserver {
     nonisolated func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
         Task { @MainActor in
-            guard self.phase == .selecting else { return }
+            guard self.phase == .selecting, self.sourceChooser == nil else { return }
             self.restoreSelectionState()
             self.status = nil
             if self.stream == nil { SCContentSharingPicker.shared.isActive = false }
@@ -436,7 +478,7 @@ extension CaptureService: SCContentSharingPickerObserver {
 
     nonisolated func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
         Task { @MainActor in
-            guard self.phase == .selecting, let mode = self.requestedSource else { return }
+            guard self.phase == .selecting, self.sourceChooser == nil, let mode = self.requestedSource else { return }
             let area = self.pendingRegion
             self.requestedSource = nil
             self.pendingRegion = nil
@@ -462,7 +504,7 @@ extension CaptureService: SCContentSharingPickerObserver {
 
     nonisolated func contentSharingPickerStartDidFailWithError(_ error: Error) {
         Task { @MainActor in
-            guard self.phase == .selecting else { return }
+            guard self.phase == .selecting, self.sourceChooser == nil else { return }
             self.restoreSelectionState()
             self.status = LocalizedMessage(error: error)
         }
