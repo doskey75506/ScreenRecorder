@@ -4,6 +4,7 @@
 
 ### Added
 
+- Drag-to-select screen recording areas, with live region previews, cancellation, and full-display reset.
 - Screen and window recording with optional source audio and microphone capture.
 - Video cropping, trimming, conversion, compression, and ordered clip concatenation.
 - Source-file snapshots and collision-safe output names.

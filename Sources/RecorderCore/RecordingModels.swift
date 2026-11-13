@@ -55,14 +55,15 @@ public enum CaptureResolution: String, CaseIterable, Identifiable, Sendable {
 }
 
 public enum RecordingPhase: Equatable, Sendable {
-    case idle, selecting, preparing, ready, starting, recording, stopping
-    public var isBusy: Bool { [.selecting, .preparing, .starting, .recording, .stopping].contains(self) }
+    case idle, selecting, selectingRegion, preparing, ready, starting, recording, stopping
+    public var isBusy: Bool { [.selecting, .selectingRegion, .preparing, .starting, .recording, .stopping].contains(self) }
     public var canStart: Bool { self == .ready }
     public var canStop: Bool { self == .recording }
     public var title: String {
         switch self {
         case .idle: L10n.text("No recording source selected", "未选择录制来源")
         case .selecting: L10n.text("Choose a display or window", "请选择显示器或窗口")
+        case .selectingRegion: L10n.text("Drag to select a screen area", "拖动选择屏幕区域")
         case .preparing: L10n.text("Preparing preview…", "正在准备预览…")
         case .ready: L10n.text("Ready", "准备就绪")
         case .starting: L10n.text("Starting recording…", "正在启动录制…")
@@ -114,10 +115,11 @@ public struct TrimRange: Equatable, Sendable {
 }
 
 public enum ValidationError: BilingualLocalizedError {
-    case invalidCrop, invalidTimeRange, noVideo, unsupportedFormat, insufficientSpace, destinationUnavailable
+    case invalidCrop, invalidCaptureRegion, invalidTimeRange, noVideo, unsupportedFormat, insufficientSpace, destinationUnavailable
     public var localizedMessage: LocalizedMessage {
         switch self {
         case .invalidCrop: LocalizedMessage("Invalid crop. Keep at least 2 × 2 pixels.", "裁剪范围无效，请保留至少 2 × 2 像素的画面。")
+        case .invalidCaptureRegion: LocalizedMessage("Select an area of at least 2 × 2 pixels within one display.", "请在同一显示器内选择至少 2 × 2 像素的区域。")
         case .invalidTimeRange: LocalizedMessage("Invalid time range. The end must follow the start and stay within the video duration.", "时间范围无效，结束时间必须大于开始时间且不超过视频时长。")
         case .noVideo: LocalizedMessage("No readable video track was found in this file.", "文件中没有可读取的视频轨道。")
         case .unsupportedFormat: LocalizedMessage("This device does not support the selected codec and container.", "当前设备不支持所选编码与容器组合。")

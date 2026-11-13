@@ -9,6 +9,7 @@ A native macOS app for screen recording, video editing, conversion, and compress
 ## Features
 
 - Record a display or app window, with optional source audio and microphone input.
+- Drag a rectangle on a display to record only the selected screen area.
 - Crop video, trim time ranges, and join selected clips from multiple videos.
 - Export H.264, HEVC, VP9, or AV1 in compatible MP4, MOV, MKV, and WebM containers.
 - Choose original resolution, 1080p, or a 640 × 480 bounding box, without upscaling.
@@ -52,6 +53,14 @@ Launch the `.app` or run through Xcode so macOS can identify the app for privacy
 Recordings default to `~/Movies/ScreenRecorder/`; a different save folder is remembered. Resizing a source window does not change the output canvas after recording starts. To record a browser tab, move it into its own browser window and select that window.
 
 The language menu at the top right switches between **English / 简体中文** without restarting or clearing your project. Native macOS pickers, dialogs, and system errors follow the system language.
+
+### Record a screen area
+
+Click **Select screen area…**. On macOS 15.2+, choose a display in the system sharing picker if one is not already selected. The app temporarily hides its main window and shows a selection overlay on that display. Drag a rectangle and release to confirm, or press **Esc** / right-click to cancel. A selection stays within one display; repeat the selection to use a different area.
+
+The preview and recording both capture only the selected rectangle. The sidebar shows its physical pixel dimensions; resolution presets scale that area while preserving its aspect ratio. Tiny selections are rejected and dimensions are rounded inward to whole, even pixels. Cancelling keeps the previous source and area. **Use full display** removes the area restriction. Source and area controls are locked while recording.
+
+On macOS 15.0–15.1, this mode needs Screen Recording permission in System Settings; macOS may require restarting the app after granting it. Select the rectangle on the desired display. Area selection limits the **picture**, while source audio continues to follow the selected display. It does not isolate audio to the rectangle.
 
 ## Edit, convert, and compress
 

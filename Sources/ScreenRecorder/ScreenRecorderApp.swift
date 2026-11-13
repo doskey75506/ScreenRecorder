@@ -41,7 +41,7 @@ struct ScreenRecorderApp: App {
                 openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
             }
-            Text(capture.phase.title + (capture.phase == .recording ? " · " + timeLabel(capture.elapsed) : ""))
+            Text(capture.phaseTitle + (capture.phase == .recording ? " · " + timeLabel(capture.elapsed) : ""))
             if capture.phase == .recording || capture.phase == .starting {
                 Button(L10n.text("Stop recording and save", "停止录制并保存")) { Task { await capture.stop() } }
             }

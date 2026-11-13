@@ -30,9 +30,15 @@ final class CaptureService: NSObject, ObservableObject {
     @Published private(set) var elapsed = 0.0
     @Published private(set) var recordedBytes: Int = 0
     @Published private(set) var sourceSize = CGSize.zero
+    @Published private(set) var captureRegion: CaptureRegion?
     @Published private(set) var completedRecording: CompletedRecording?
     @Published private var status: LocalizedMessage?
     var message: String? { status?.text() }
+    var phaseTitle: String {
+        phase == .selecting && choosingRegionSource
+            ? L10n.text("Choose a display for the recording area", "请选择区域录屏所在的显示器")
+            : phase.title
+    }
 
     @Published var codec: VideoCodec = .h264
     @Published var container: VideoContainer = .mp4
@@ -53,6 +59,8 @@ final class CaptureService: NSObject, ObservableObject {
     private var timer: Timer?
     private var startingAt: Date?
     private var finalizationTask: Task<Void, Never>?
+    private let regionSelector = ScreenRegionSelector()
+    private var choosingRegionSource = false
     private let frameQueue = DispatchQueue(label: "ScreenRecorder.preview", qos: .utility)
 
     override init() {
@@ -76,10 +84,98 @@ final class CaptureService: NSObject, ObservableObject {
 
     func chooseSource() {
         guard !phase.isBusy else { return }
+        choosingRegionSource = false
         status = nil
         phase = .selecting
+        var options = SCContentSharingPicker.shared.defaultConfiguration
+        options.allowedPickerModes = [.singleWindow, .singleDisplay]
+        SCContentSharingPicker.shared.defaultConfiguration = options
         SCContentSharingPicker.shared.isActive = true
         SCContentSharingPicker.shared.present()
+    }
+
+    func chooseScreenRegion() async {
+        guard !phase.isBusy else { return }
+        if #available(macOS 15.2, *) {
+            if let filter, filter.style == .display, let display = filter.includedDisplays.first {
+                await chooseRegion(for: filter, displayID: display.displayID)
+            } else {
+                choosingRegionSource = true
+                status = nil
+                phase = .selecting
+                var options = SCContentSharingPicker.shared.defaultConfiguration
+                options.allowedPickerModes = [.singleDisplay]
+                SCContentSharingPicker.shared.defaultConfiguration = options
+                SCContentSharingPicker.shared.isActive = true
+                SCContentSharingPicker.shared.present(using: .display)
+            }
+            return
+        }
+        await chooseScreenRegionLegacy()
+    }
+
+    private func chooseRegion(for selected: SCContentFilter, displayID: CGDirectDisplayID) async {
+        status = nil
+        phase = .selectingRegion
+        let selection = await regionSelector.select(displayID: displayID)
+        guard phase == .selectingRegion else { return }
+        guard let selection else {
+            phase = stream == nil ? .idle : .ready
+            if stream == nil { SCContentSharingPicker.shared.isActive = false }
+            return
+        }
+        do {
+            selected.includeMenuBar = true
+            let region = try CaptureRegion(appKitRect: selection.appKitRect, displaySize: selection.displaySize,
+                                           pixelScale: CGFloat(selected.pointPixelScale))
+            await prepare(selected, region: region)
+        } catch {
+            phase = stream == nil ? .idle : .ready
+            status = LocalizedMessage(error: error)
+        }
+    }
+
+    // macOS 15.0–15.1 does not expose the display identity of a picker filter.
+    // Use direct display capture there, with the usual explicit system permission.
+    private func chooseScreenRegionLegacy() async {
+        status = nil
+        phase = .selectingRegion
+        // Direct display capture needs Screen Recording access; request it only
+        // when the user explicitly chooses this capture mode.
+        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
+            phase = stream == nil ? .idle : .ready
+            status = LocalizedMessage(
+                "Allow ScreenRecorder in System Settings → Privacy & Security → Screen Recording, then try selecting an area again. macOS may require restarting the app.",
+                "请在系统设置 → 隐私与安全性 → 屏幕录制中允许 ScreenRecorder，再重新选择区域。macOS 可能要求重新启动应用。")
+            return
+        }
+        let selection = await regionSelector.select()
+        guard phase == .selectingRegion else { return }
+        guard let selection else {
+            phase = stream == nil ? .idle : .ready
+            return
+        }
+        do {
+            let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+            guard phase == .selectingRegion else { return }
+            guard let display = content.displays.first(where: { $0.displayID == selection.displayID }) else {
+                throw ValidationError.invalidCaptureRegion
+            }
+            let ownApps = content.applications.filter { $0.processID == ProcessInfo.processInfo.processIdentifier }
+            let selected = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
+            let region = try CaptureRegion(appKitRect: selection.appKitRect, displaySize: selection.displaySize,
+                                           pixelScale: CGFloat(selected.pointPixelScale))
+            await prepare(selected, region: region)
+        } catch {
+            guard phase == .selectingRegion else { return }
+            phase = stream == nil ? .idle : .ready
+            status = LocalizedMessage(error: error)
+        }
+    }
+
+    func useFullDisplay() async {
+        guard !phase.isBusy, captureRegion != nil, let filter else { return }
+        await prepare(filter)
     }
 
     func chooseDirectory() {
@@ -97,6 +193,7 @@ final class CaptureService: NSObject, ObservableObject {
         let size = resolution.outputSize(for: sourceSize)
         configuration.width = Int(size.width)
         configuration.height = Int(size.height)
+        if let captureRegion { configuration.sourceRect = captureRegion.sourceRect }
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 30)
         configuration.queueDepth = 4
         configuration.showsCursor = true
@@ -111,14 +208,16 @@ final class CaptureService: NSObject, ObservableObject {
         return configuration
     }
 
-    private func prepare(_ selected: SCContentFilter) async {
+    private func prepare(_ selected: SCContentFilter, region: CaptureRegion? = nil) async {
         phase = .preparing
-        if let stream { try? await stream.stopCapture() }
+        let previous = stream
         stream = nil
+        if let previous { try? await previous.stopCapture() }
         preview = nil
         filter = selected
-        sourceSize = CGSize(width: selected.contentRect.width * CGFloat(selected.pointPixelScale),
-                            height: selected.contentRect.height * CGFloat(selected.pointPixelScale))
+        captureRegion = region
+        sourceSize = region?.pixelSize ?? CGSize(width: selected.contentRect.width * CGFloat(selected.pointPixelScale),
+                                                height: selected.contentRect.height * CGFloat(selected.pointPixelScale))
         guard sourceSize.width >= 2, sourceSize.height >= 2 else {
             phase = .idle
             status = LocalizedMessage("The selected window has no recordable content. Choose another source.", "所选窗口没有可录制的画面，请重新选择。")
@@ -252,6 +351,8 @@ final class CaptureService: NSObject, ObservableObject {
     }
 
     private func finishCapture() {
+        regionSelector.cancel()
+        choosingRegionSource = false
         timer?.invalidate()
         timer = nil
         finalizationTask?.cancel()
@@ -263,6 +364,8 @@ final class CaptureService: NSObject, ObservableObject {
         previewOutput = nil
         preview = nil
         filter = nil
+        captureRegion = nil
+        sourceSize = .zero
         phase = .idle
         SCContentSharingPicker.shared.isActive = false
     }
@@ -293,6 +396,7 @@ extension CaptureService: SCContentSharingPickerObserver {
     nonisolated func contentSharingPicker(_ picker: SCContentSharingPicker, didCancelFor stream: SCStream?) {
         Task { @MainActor in
             guard self.phase == .selecting else { return }
+            self.choosingRegionSource = false
             self.phase = self.stream == nil ? .idle : .ready
             if self.stream == nil { SCContentSharingPicker.shared.isActive = false }
         }
@@ -301,12 +405,25 @@ extension CaptureService: SCContentSharingPickerObserver {
     nonisolated func contentSharingPicker(_ picker: SCContentSharingPicker, didUpdateWith filter: SCContentFilter, for stream: SCStream?) {
         Task { @MainActor in
             guard self.phase == .selecting else { return }
-            await self.prepare(filter)
+            let area = self.choosingRegionSource
+            self.choosingRegionSource = false
+            if area {
+                if #available(macOS 15.2, *), filter.style == .display, let display = filter.includedDisplays.first {
+                    await self.chooseRegion(for: filter, displayID: display.displayID)
+                } else {
+                    self.phase = self.stream == nil ? .idle : .ready
+                    self.status = LocalizedMessage(error: ValidationError.invalidCaptureRegion)
+                }
+            } else {
+                await self.prepare(filter)
+            }
         }
     }
 
     nonisolated func contentSharingPickerStartDidFailWithError(_ error: Error) {
         Task { @MainActor in
+            guard self.phase == .selecting else { return }
+            self.choosingRegionSource = false
             self.phase = self.stream == nil ? .idle : .ready
             self.status = LocalizedMessage(error: error)
         }

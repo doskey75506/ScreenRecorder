@@ -63,7 +63,7 @@ private struct RecordingView: View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Label(capture.phase.title, systemImage: capture.phase == .recording ? "record.circle.fill" : "display")
+                    Label(capture.phaseTitle, systemImage: capture.phase == .recording ? "record.circle.fill" : "display")
                         .foregroundStyle(capture.phase == .recording ? .red : .primary)
                     Spacer()
                     if capture.sourceSize.width > 0 {
@@ -103,6 +103,24 @@ private struct RecordingView: View {
                         Label(capture.phase == .ready ? L10n.text("Choose another source", "重新选择来源") : L10n.text("Choose display / window", "选择显示器 / 窗口"), systemImage: "plus.rectangle.on.rectangle")
                             .frame(maxWidth: .infinity)
                     }.controlSize(.large).disabled(capture.phase.isBusy)
+                    Button { Task { await capture.chooseScreenRegion() } } label: {
+                        Label(L10n.text("Select screen area…", "拖选屏幕区域…"), systemImage: "viewfinder")
+                            .frame(maxWidth: .infinity)
+                    }.controlSize(.large).disabled(capture.phase.isBusy)
+                    if let region = capture.captureRegion {
+                        Text(L10n.text("Area: \(Int(region.pixelSize.width)) × \(Int(region.pixelSize.height)) px",
+                                       "区域：\(Int(region.pixelSize.width)) × \(Int(region.pixelSize.height)) 像素"))
+                            .font(.caption.monospacedDigit())
+                        Button(L10n.text("Use full display", "恢复整屏")) { Task { await capture.useFullDisplay() } }
+                            .disabled(capture.phase.isBusy)
+                        Text(L10n.text("Only the selected picture area is recorded. Source audio still follows the display.",
+                                       "只录制框内画面；来源音频仍按显示器捕获。"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text(L10n.text("Drag a rectangle on your desktop to record only that area. Esc cancels.",
+                                       "在桌面拖出一个框，只录制框内画面。按 Esc 取消。"))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Divider()
                     sectionTitle(L10n.text("File format", "存储格式"), systemImage: "film")
                     Picker(L10n.text("Codec", "编码"), selection: $capture.codec) {
